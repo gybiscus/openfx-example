@@ -17,7 +17,6 @@ extern OfxParameterSuiteV1   *gParamHost;
 extern OfxMemorySuiteV1      *gMemoryHost;
 extern OfxMultiThreadSuiteV1 *gThreadHost;
 extern OfxMessageSuiteV1     *gMessageSuite;
-extern OfxTimeLineSuiteV1    *gTimeLineSuite;
 
 /* fetch our host APIs from the host struct given us
    the plugin's set host function must have been already called
@@ -35,7 +34,6 @@ ofxuFetchHostSuites(void)
   gThreadHost   = (OfxMultiThreadSuiteV1 *) gHost->fetchSuite(gHost->host, kOfxMultiThreadSuite, 1);
   gMessageSuite   = (OfxMessageSuiteV1 *)   gHost->fetchSuite(gHost->host, kOfxMessageSuite, 1);
   gInteractHost   = (OfxInteractSuiteV1 *)   gHost->fetchSuite(gHost->host, kOfxInteractSuite, 1);
-  gTimeLineSuite = (OfxTimeLineSuiteV1 *)   gHost->fetchSuite(gHost->host, kOfxTimeLineSuite, 1);
   if(!gEffectHost || !gPropHost || !gParamHost || !gMemoryHost || !gThreadHost)
     return kOfxStatErrMissingHostFeature;
   return kOfxStatOK;

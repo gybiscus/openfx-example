@@ -58,36 +58,24 @@ OfxMemorySuiteV1      *gMemoryHost = 0;
 OfxMessageSuiteV1     *gMessageSuite = 0;
 OfxInteractSuiteV1    *gInteractHost = 0;
 
-OfxTimeLineSuiteV1    *gTimeLineSuite = 0;
-
 // some flags about the host's behaviour
 int gHostSupportsMultipleBitDepths = false;
 
 // private instance data type
-struct MyInstanceData {
-
+struct MyInstanceData
+{
   // handles to the clips we deal with
   OfxImageClipHandle sourceClip;
-//  OfxImageClipHandle maskClip;
   OfxImageClipHandle outputClip;
 
   // handles to a our parameters
   OfxParamHandle scaleParam;
-  OfxParamHandle perComponentScaleParam;
-  OfxParamHandle scaleRParam;
-  OfxParamHandle scaleGParam;
-  OfxParamHandle scaleBParam;
-  OfxParamHandle scaleAParam;
-
   OfxParamHandle prepareButtonParam;
+  OfxParamHandle adjustButtonParam;
+  OfxParamHandle triggerParam;
 };
 
-/* mandatory function to set up the host structures */
-
-
-// Convinience wrapper to get private data 
-static MyInstanceData *
-getMyInstanceData( OfxImageEffectHandle effect)
+static MyInstanceData *getMyInstanceData(OfxImageEffectHandle effect)
 {
   // get the property handle for the plugin
   OfxPropertySetHandle effectProps;
@@ -100,8 +88,7 @@ getMyInstanceData( OfxImageEffectHandle effect)
 }
 
 // Convinience wrapper to set the enabledness of a parameter
-static inline void
-setParamEnabledness( OfxImageEffectHandle effect,
+static inline void setParamEnabledness( OfxImageEffectHandle effect,
                     const char *paramName,
                     int enabledState)
 {
@@ -109,7 +96,7 @@ setParamEnabledness( OfxImageEffectHandle effect,
   // fetch the parameter set for this effect
   OfxParamSetHandle paramSet;
   gEffectHost->getParamSet(effect, &paramSet);
-  
+
   // fetch the parameter property handle
   OfxParamHandle param; OfxPropertySetHandle paramProps;
   gParamHost->paramGetHandle(paramSet, paramName, &param, &paramProps);
@@ -119,43 +106,7 @@ setParamEnabledness( OfxImageEffectHandle effect,
   LOG_OUT;
 }
 
-// function thats sets the enabledness of the percomponent scale parameters
-// depending on the value of the 
-// This function is called when the 'scaleComponents' value is changed
-// or when the input clip has been changed
-static void
-setPerComponentScaleEnabledness( OfxImageEffectHandle effect)
-{
-  LOG_IN;
-  // get my instance data
-  MyInstanceData *myData = getMyInstanceData(effect);
-
-  // get the value of the percomponent scale param
-  int perComponentScale;
-  gParamHost->paramGetValue(myData->perComponentScaleParam, &perComponentScale);
-
-  if(ofxuIsClipConnected(effect, kOfxImageEffectSimpleSourceClipName)) {
-    OfxPropertySetHandle props; gEffectHost->clipGetPropertySet(myData->sourceClip, &props);
-
-    // get the input clip format
-    char *pixelType;
-    gPropHost->propGetString(props, kOfxImageEffectPropComponents, 0, &pixelType);
-
-    // only enable the scales if the input is an RGBA input
-    perComponentScale = perComponentScale && !(strcmp(pixelType, kOfxImageComponentAlpha) == 0);
-  }
-
-  // set the enabled/disabled state of the parameter
-  setParamEnabledness(effect, "scaleR", perComponentScale);
-  setParamEnabledness(effect, "scaleG", perComponentScale);
-  setParamEnabledness(effect, "scaleB", perComponentScale);
-  setParamEnabledness(effect, "scaleA", perComponentScale);
-  LOG_OUT;
-}
-
-/** @brief Called at load */
-static OfxStatus
-onLoad(void)
+static OfxStatus onLoad(void)
 {
   LOG_IN;
   TimerReset();
@@ -163,18 +114,14 @@ onLoad(void)
   return kOfxStatOK;
 }
 
-/** @brief Called before unload */
-static OfxStatus
-onUnLoad(void)
+static OfxStatus onUnLoad(void)
 {
   LOG_IN;
   LOG_OUT;
   return kOfxStatOK;
 }
 
-//  instance construction
-static OfxStatus
-createInstance( OfxImageEffectHandle effect)
+static OfxStatus createInstance( OfxImageEffectHandle effect)
 {
   LOG_IN;
   // get a pointer to the effect properties
@@ -187,30 +134,19 @@ createInstance( OfxImageEffectHandle effect)
 
   // make my private instance data
   MyInstanceData *myData = new MyInstanceData;
-  char *context = 0;
 
   // cache away out param handles
-  gParamHost->paramGetHandle(paramSet, "scaleComponents", &myData->perComponentScaleParam, 0);
   gParamHost->paramGetHandle(paramSet, "scale", &myData->scaleParam, 0);
-  gParamHost->paramGetHandle(paramSet, "scaleR", &myData->scaleRParam, 0);
-  gParamHost->paramGetHandle(paramSet, "scaleG", &myData->scaleGParam, 0);
-  gParamHost->paramGetHandle(paramSet, "scaleB", &myData->scaleBParam, 0);
-  gParamHost->paramGetHandle(paramSet, "scaleA", &myData->scaleAParam, 0);
-
   gParamHost->paramGetHandle(paramSet, "prepareButton", &myData->prepareButtonParam, 0);
+  gParamHost->paramGetHandle(paramSet, "adjustButton", &myData->adjustButtonParam, 0);
+  gParamHost->paramGetHandle(paramSet, "trigger", &myData->triggerParam, 0);
 
   // cache away out clip handles
   gEffectHost->clipGetHandle(effect, kOfxImageEffectSimpleSourceClipName, &myData->sourceClip, 0);
   gEffectHost->clipGetHandle(effect, kOfxImageEffectOutputClipName, &myData->outputClip, 0);
 
-//  myData->maskClip = 0;
-
-  // set my private instance data
   gPropHost->propSetPointer(effectProps, kOfxPropInstanceData, 0, (void *) myData);
 
-  // As the parameters values have already been loaded, set 
-  // the enabledness of the per component scale values
-  setPerComponentScaleEnabledness(effect);
   setParamEnabledness(effect, "adjustButton", 0);
 
   LOG_OUT;
@@ -218,67 +154,40 @@ createInstance( OfxImageEffectHandle effect)
   return kOfxStatOK;
 }
 
-// instance destruction
-static OfxStatus
-destroyInstance( OfxImageEffectHandle  effect)
+static OfxStatus destroyInstance(OfxImageEffectHandle  effect)
 {
   LOG_IN;
-  // get my instance data
-  MyInstanceData *myData = getMyInstanceData(effect);
 
-  // and delete it
-  if(myData)
-    delete myData;
+  MyInstanceData *myData = getMyInstanceData(effect);
+  if(myData) delete myData;
+
   LOG_OUT;
   return kOfxStatOK;
 }
 
-// are the settings of the effect performing an identity operation
-static OfxStatus
-isIdentity( OfxImageEffectHandle  effect,
-            OfxPropertySetHandle inArgs,
-            OfxPropertySetHandle outArgs)
+static OfxStatus isIdentity( OfxImageEffectHandle  effect, OfxPropertySetHandle inArgs, OfxPropertySetHandle outArgs)
 {
   LOG_IN;
-  // get the render window and the time from the inArgs
+
   OfxTime time;
-//  OfxRectI renderWindow;
-
   gPropHost->propGetDouble(inArgs, kOfxPropTime, 0, &time);
-//  gPropHost->propGetIntN(inArgs, kOfxImageEffectPropRenderWindow, 4, &renderWindow.x1);
 
-  // retrieve any instance data associated with this effect
   MyInstanceData *myData = getMyInstanceData(effect);
 
-  double scaleValue, sR = 1, sG = 1, sB = 1, sA = 1;
+  double scaleValue;
   gParamHost->paramGetValueAtTime(myData->scaleParam, time, &scaleValue);
 
-  if(ofxuGetClipPixelsAreRGBA(myData->sourceClip)) {
-    gParamHost->paramGetValueAtTime(myData->scaleRParam, time, &sR);
-    gParamHost->paramGetValueAtTime(myData->scaleGParam, time, &sG);
-    gParamHost->paramGetValueAtTime(myData->scaleBParam, time, &sB);
-    gParamHost->paramGetValueAtTime(myData->scaleAParam, time, &sA);
-  }
-
-  // if the scale values are all 1, then we have an identity xfm on the Source clip
-  if(scaleValue == 1.0 && sR==1 && sG == 1 && sB == 1 && sA == 1) {
-    // set the property in the out args indicating which is the identity clip
+  if(scaleValue == 1.0)
+  {
     gPropHost->propSetString(outArgs, kOfxPropName, 0, kOfxImageEffectSimpleSourceClipName);
     return kOfxStatOK;
   }
 
-
   LOG_OUT;
-  // In this case do the default, which in this case is to render 
   return kOfxStatReplyDefault;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// function called when the instance has been changed by anything
-static OfxStatus
-instanceChanged( OfxImageEffectHandle  effect,
-                 OfxPropertySetHandle inArgs,
-                 OfxPropertySetHandle /*outArgs*/)
+static OfxStatus instanceChanged(OfxImageEffectHandle  effect, OfxPropertySetHandle inArgs, OfxPropertySetHandle /*outArgs*/)
 {
   LOG_IN;
   // see why it changed
@@ -304,24 +213,12 @@ instanceChanged( OfxImageEffectHandle  effect,
   LOG_STR(typeChanged);
   LOG_STR(changeReason);
 
-  OfxTime time;
-  gTimeLineSuite->getTime(effect, &time);
-  LOG_INT(time);
-  OfxStatus Q = gTimeLineSuite->gotoTime(effect, time+1);
-  LOG_INT(Q);
-
   if(isParam && strcmp(objChanged, "prepareButton")  == 0)
   {
     setParamEnabledness(effect, "adjustButton", 1);
-  }
-
-  // Did the source clip change or the 'scaleComponents' change? In which case enable/disable individual component scale parameters
-  if((isClip && strcmp(objChanged, kOfxImageEffectSimpleSourceClipName)  == 0) ||
-     (isParam && strcmp(objChanged, "scaleComponents")  == 0)) {
-    setPerComponentScaleEnabledness(effect);
-    LOG_OUT;
     return kOfxStatOK;
   }
+
   LOG_OUT;
   // don't trap any others
   return kOfxStatReplyDefault;
@@ -354,9 +251,9 @@ class Processor {
  protected :
   OfxImageEffectHandle  instance;
   float         rScale, gScale, bScale, aScale;
-  void *srcV, *dstV; //, *maskV; 
-  OfxRectI srcRect, dstRect; //, maskRect;
-  int srcBytesPerLine, dstBytesPerLine; //, maskBytesPerLine;
+  void *srcV, *dstV;
+  OfxRectI srcRect, dstRect;
+  int srcBytesPerLine, dstBytesPerLine;
   OfxRectI  window;
 
  public :
@@ -364,7 +261,6 @@ class Processor {
             float rScal, float gScal, float bScal, float aScal,
             void *src, OfxRectI sRect, int sBytesPerLine,
             void *dst, OfxRectI dRect, int dBytesPerLine,
-            /*void *mask, OfxRectI mRect, int mBytesPerLine,*/
             OfxRectI  win)
     : instance(inst)
     , rScale(rScal)
@@ -373,13 +269,10 @@ class Processor {
     , aScale(aScal)
     , srcV(src)
     , dstV(dst)
-    //, maskV(mask)
     , srcRect(sRect)
     , dstRect(dRect)
-    //, maskRect(mRect)
     , srcBytesPerLine(sBytesPerLine)
     , dstBytesPerLine(dBytesPerLine)
-    //, maskBytesPerLine(mBytesPerLine)
     , window(win)
   {}
 
@@ -405,7 +298,7 @@ Processor::multiThreadProcessing(unsigned int threadId, unsigned int nThreads, v
   win.y1 = y1; win.y2 = y2;
 
   // and render that thread on each
-  proc->doProcessing(win);  
+  proc->doProcessing(win);
 }
 
 // function to kick off rendering across multiple CPUs
@@ -425,13 +318,11 @@ public :
           float rScale, float gScale, float bScale, float aScale,
           void *srcV, OfxRectI srcRect, int srcBytesPerLine,
           void *dstV, OfxRectI dstRect, int dstBytesPerLine,
-          //void *maskV, OfxRectI maskRect, int maskBytesPerLine,
           OfxRectI  window)
     : Processor(instance,
                 rScale, gScale, bScale, aScale,
                 srcV,  srcRect,  srcBytesPerLine,
                 dstV,  dstRect,  dstBytesPerLine,
-                //maskV,  maskRect, maskBytesPerLine,
                 window)
   {
   }
@@ -440,7 +331,6 @@ public :
   {
     PIX *src = (PIX *) srcV;
     PIX *dst = (PIX *) dstV;
-    //MASK *mask = (MASK *) maskV;
 
     for(int y = procWindow.y1; y < procWindow.y2; y++) {
       if(gEffectHost->abort(instance)) break;
@@ -451,19 +341,6 @@ public :
 
         PIX *srcPix = pixelAddress(src, srcRect, x, y, srcBytesPerLine);
 
-        /*
-        // do any pixel masking?
-        float maskV = 1.0f;
-        if(mask) {
-          MASK *maskPix = pixelAddress(mask, maskRect, x, y, maskBytesPerLine);
-          if(maskPix) {
-            maskV = float(*maskPix)/float(max);
-          }
-          else
-            maskV = 0.0f;
-          maskPix++;
-        }
-*/
         // figure the scale values per component
         float sR = 1.0 + (rScale - 1.0);// * maskV;
         float sG = 1.0 + (gScale - 1.0);// * maskV;
@@ -485,9 +362,6 @@ public :
             dstPix->a = Clamp(int(srcPix->a * sA), 0, max);
           }
           srcPix++;
-        }
-        else {
-        //  dstPix->r = dstPix->g = dstPix->b = dstPix->a= 0;
         }
         dstPix++;
       }
@@ -516,9 +390,9 @@ static OfxStatus render( OfxImageEffectHandle  instance,
   // in reality, we would put this in a struct as the C++ support layer does
   OfxPropertySetHandle sourceImg = NULL, outputImg = NULL;//, maskImg = NULL;
   int srcRowBytes, srcBitDepth, dstRowBytes, dstBitDepth;//, maskRowBytes = 0, maskBitDepth;
-  bool srcIsAlpha, dstIsAlpha;//, maskIsAlpha = false;
-  OfxRectI dstRect, srcRect;//, maskRect = {0};
-  void *src, *dst;//, *mask = NULL;
+  bool srcIsAlpha, dstIsAlpha;
+  OfxRectI dstRect, srcRect;
+  void *src, *dst;
 
   try {
     // get the source image
@@ -534,21 +408,10 @@ static OfxStatus render( OfxImageEffectHandle  instance,
       throw OfxuStatusException(kOfxStatErrImageFormat);
     }
 
-    // are we compenent scaling
-    int scaleComponents;
-    gParamHost->paramGetValueAtTime(myData->perComponentScaleParam, time, &scaleComponents);
-
     // get the scale parameters
     double scale, rScale = 1, gScale = 1, bScale = 1, aScale = 1;
     gParamHost->paramGetValueAtTime(myData->scaleParam, time, &scale);
-
-    if(scaleComponents) {
-      gParamHost->paramGetValueAtTime(myData->scaleRParam, time, &rScale);
-      gParamHost->paramGetValueAtTime(myData->scaleGParam, time, &gScale);
-      gParamHost->paramGetValueAtTime(myData->scaleBParam, time, &bScale);
-      gParamHost->paramGetValueAtTime(myData->scaleAParam, time, &aScale);
-    }
-    rScale *= scale; gScale *= scale; bScale *= scale; aScale *= scale;
+    rScale = scale; gScale = scale; bScale = scale; aScale = scale;
 
     // do the rendering
     if(!dstIsAlpha) {
@@ -597,16 +460,14 @@ static OfxStatus render( OfxImageEffectHandle  instance,
   }
 
   // release the data pointers
-//  if(maskImg)
-//    gEffectHost->clipReleaseImage(maskImg);
   if(sourceImg)
     gEffectHost->clipReleaseImage(sourceImg);
   if(outputImg)
     gEffectHost->clipReleaseImage(outputImg);
 
 //  setParamEnabledness(instance, "adjustButton", 0);
-  OfxStatus r = gParamHost->paramSetValue(myData->prepareButtonParam, "prepareButton", "click!");
-  LOG_INT(r);
+  //OfxStatus r = gParamHost->paramSetValue(myData->prepareButtonParam, "prepareButton", "click!");
+  //LOG_INT(r);
   LOG_OUT;
 
   return status;
@@ -641,8 +502,7 @@ defineScaleParam( OfxParamSetHandle effectParams,
 }
 
 //  describe the plugin in context
-static OfxStatus
-describeInContext( OfxImageEffectHandle  effect,  OfxPropertySetHandle inArgs)
+static OfxStatus describeInContext(OfxImageEffectHandle  effect,  OfxPropertySetHandle inArgs)
 {
   OfxPropertySetHandle props;
   // define the single output clip in both contexts
@@ -659,36 +519,11 @@ describeInContext( OfxImageEffectHandle  effect,  OfxPropertySetHandle inArgs)
   gPropHost->propSetString(props, kOfxImageEffectPropSupportedComponents, 0, kOfxImageComponentRGBA);
   gPropHost->propSetString(props, kOfxImageEffectPropSupportedComponents, 1, kOfxImageComponentAlpha);
 
-  ////////////////////////////////////////////////////////////////////////////////
-  // define the parameters for this context
-  // fetch the parameter set from the effect
   OfxParamSetHandle paramSet;
   gEffectHost->getParamSet(effect, &paramSet);
 
   // overall scale param
   defineScaleParam(paramSet, "scale", "scale", "scale", "Scales all component in the image", 0);
-
-  // boolean param to enable/disable per component scaling
-  gParamHost->paramDefine(paramSet, kOfxParamTypeBoolean, "scaleComponents", &props);
-  gPropHost->propSetInt(props, kOfxParamPropDefault, 0, 0);
-  gPropHost->propSetString(props, kOfxParamPropHint, 0, "Enables scales on individual components");
-  gPropHost->propSetString(props, kOfxParamPropScriptName, 0, "scaleComponents");
-  gPropHost->propSetString(props, kOfxPropLabel, 0, "Scale Individual Components");
-
-  // grouping parameter for the by component params
-  gParamHost->paramDefine(paramSet, kOfxParamTypeGroup, "componentScales", &props);
-  gPropHost->propSetString(props, kOfxParamPropHint, 0, "Scales on the individual component");
-  gPropHost->propSetString(props, kOfxPropLabel, 0, "Components");
-
-  // rgb and a scale params
-  defineScaleParam(paramSet, "scaleR", "red", "scaleR", 
-                   "Scales the red component of the image", "componentScales");
-  defineScaleParam(paramSet, "scaleG", "green", "scaleG",
-                   "Scales the green component of the image", "componentScales");
-  defineScaleParam(paramSet, "scaleB", "blue", "scaleB", 
-                   "Scales the blue component of the image", "componentScales");
-  defineScaleParam(paramSet, "scaleA", "alpha", "scaleA", 
-                   "Scales the alpha component of the image", "componentScales");
 
   gParamHost->paramDefine(paramSet, kOfxParamTypePushButton, "prepareButton", &props);
   gPropHost->propSetString(props, kOfxPropLabel, 0, "Prepare");
@@ -698,24 +533,22 @@ describeInContext( OfxImageEffectHandle  effect,  OfxPropertySetHandle inArgs)
   gPropHost->propSetString(props, kOfxPropLabel, 0, "Adjust");
   gPropHost->propSetString(props, kOfxParamPropScriptName, 0, "adjustButton");
 
+  gParamHost->paramDefine(paramSet, kOfxParamTypeBoolean, "trigger", &props);
+  gPropHost->propSetInt(props, kOfxParamPropDefault, 0, 0);
+  gPropHost->propSetString(props, kOfxParamPropScriptName, 0, "trigger");
+  gPropHost->propSetString(props, kOfxPropLabel, 0, "trigger");
+
   // make a page of controls and add my parameters to it
   gParamHost->paramDefine(paramSet, kOfxParamTypePage, "Main", &props);
   gPropHost->propSetString(props, kOfxParamPropPageChild, 0, "scale");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 1, "scaleComponents");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 2, "scaleR");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 3, "scaleG");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 4, "scaleB");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 5, "scaleA");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 6, "prepareButton");
-  gPropHost->propSetString(props, kOfxParamPropPageChild, 7, "adjustButton");
+  gPropHost->propSetString(props, kOfxParamPropPageChild, 1, "prepareButton");
+  gPropHost->propSetString(props, kOfxParamPropPageChild, 2, "adjustButton");
+  gPropHost->propSetString(props, kOfxParamPropPageChild, 3, "trigger");
 
   return kOfxStatOK;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// the plugin's description routine
-static OfxStatus
-describe(OfxImageEffectHandle  effect)
+static OfxStatus describe(OfxImageEffectHandle  effect)
 {
   // first fetch the host APIs, this cannot be done before this call
   OfxStatus stat;
@@ -748,10 +581,7 @@ describe(OfxImageEffectHandle  effect)
   return kOfxStatOK;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// The main function
-static OfxStatus
-pluginMain(const char *action,  const void *handle, OfxPropertySetHandle inArgs,  OfxPropertySetHandle outArgs)
+static OfxStatus pluginMain(const char *action,  const void *handle, OfxPropertySetHandle inArgs,  OfxPropertySetHandle outArgs)
 {
   LOG_IN;
   LOG_STR(action);
@@ -808,14 +638,11 @@ pluginMain(const char *action,  const void *handle, OfxPropertySetHandle inArgs,
 }
 
 // function to set the host structure
-static void
-setHostFunc(OfxHost *hostStruct)
+static void setHostFunc(OfxHost *hostStruct)
 {
   gHost         = hostStruct;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// the plugin struct 
 static OfxPlugin basicPlugin = 
 {
   kOfxImageEffectPluginApi,
@@ -828,16 +655,14 @@ static OfxPlugin basicPlugin =
 };
 
 // the two mandated functions
-EXPORT OfxPlugin *
-OfxGetPlugin(int nth)
+EXPORT OfxPlugin *OfxGetPlugin(int nth)
 {
   if(nth == 0)
     return &basicPlugin;
   return 0;
 }
 
-EXPORT int
-OfxGetNumberOfPlugins(void)
+EXPORT int OfxGetNumberOfPlugins(void)
 {
   return 1;
 }
